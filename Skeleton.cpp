@@ -38,11 +38,11 @@ const char * const vertexSource = R"(
 	#version 330				// Shader 3.3
 	precision highp float;		// normal floats, makes no difference on desktop computers
 
-	uniform mat4 MVP;			// uniform variable, the Model-View-Projection transformation matrix
+	//uniform mat4 MVP;			// uniform variable, the Model-View-Projection transformation matrix
 	layout(location = 0) in vec3 vp;	// Varying input: vp = vertex position is expected in attrib array 0
 
 	void main() {
-		gl_Position = vec4(vp.x/(vp.z+1), vp.y/(vp.z+1), 1, 1) * MVP;		// transform vp from modeling space to normalized device space
+		gl_Position = vec4(vp.x/(vp.z+1), vp.y/(vp.z+1), 1, 1);		// transform vp from modeling space to normalized device space
 	}
 )";
 
@@ -111,32 +111,60 @@ vec3 hip_w(vec3 v,vec3 p){
     return vek;                                                              // Merőleges pont visszavetítés
 }
 
-///////////////////////////////////////////////////////////////
+const int nv = 1000;
+vec3 vert[nv];
 
-const int nv = 100;
+unsigned int vbo;
+unsigned int vbo2;
 
-// Initialization, create an OpenGL context
-void onInitialization() {
-    glViewport(0, 0, windowWidth, windowHeight);
+bool pressed[256] = {false,};
+float yRot = 0.0f;
+float xRot = 0.0f;
+
+
+void circ(){
 
     glGenVertexArrays(1, &vao);	// get 1 vao id
-    glBindVertexArray(vao);		// make it active
+    glBindVertexArray(vao);
 
-    unsigned int vbo;		// vertex buffer object
+
     glGenBuffers(1, &vbo);	// Generate 1 buffer
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
 
-/*
-    vec3 vert[nv];
+    vec3 kor(0,0,1);
+    vec3 nagyVek(1.54,0,0);
 
     for (int i = 0; i < nv; ++i) {
-        float fi = i*2*M_PI/nv;
-        vert[i] = vec2(cosf(fi));
+        vec3 p1 = pont(nagyVek,kor);
+        vert[i] = p1;
+        nagyVek = rotate(nagyVek,kor,0.00628318531);
     }
-*/
 
-    vec3 ori(0,0,1);
-    vec3 vek(2,0,0);
+
+    glBufferData(GL_ARRAY_BUFFER, 	// Copy to GPU target
+                 sizeof(vec3)*nv,  // # bytes
+                 vert,	      	// address
+                 GL_STATIC_DRAW);	// we do not change later
+
+
+    glEnableVertexAttribArray(0);  // AttribArray 0
+    glVertexAttribPointer(0,       // vbo -> AttribArray 0
+                          3, GL_FLOAT, GL_FALSE, // two floats/attrib, not fixed-point
+                          0, NULL); 		     // stride, offset: tightly packed
+
+
+}
+
+void hip_circ(float yrot,float xrot){
+
+    glGenVertexArrays(1, &vao);	// get 1 vao id
+    glBindVertexArray(vao);
+
+    glGenBuffers(1, &vbo2);	// Generate 1 buffer
+    glBindBuffer(GL_ARRAY_BUFFER, vbo2);
+
+    vec3 ori(xrot,yrot,1);
+    vec3 vek(1,0,0);
     ori.z = p_w(ori);
     vek = hip_w(vek,ori);
     vek = norm(vek);
@@ -150,6 +178,7 @@ void onInitialization() {
       vek = rotate(vek,ori,0.0628318531);
     }
 
+
     glBufferData(GL_ARRAY_BUFFER, 	// Copy to GPU target
                  sizeof(vec3)*nv,  // # bytes
                  vertices,	      	// address
@@ -160,41 +189,62 @@ void onInitialization() {
                           3, GL_FLOAT, GL_FALSE, // two floats/attrib, not fixed-point
                           0, NULL); 		     // stride, offset: tightly packed
 
+}
+
+///////////////////////////////////////////////////////////////
+
+
+
+
+// Initialization, create an OpenGL context
+void onInitialization() {
+    glViewport(0, 0, windowWidth, windowHeight);
+
+    circ();
+
+
+
     // create program for the GPU
     gpuProgram.create(vertexSource, fragmentSource, "outColor");
 }
 
 // Window has become invalid: Redraw
 void onDisplay() {
-    glClearColor(0, 0, 0, 0);     // background color
+    glClearColor(0.25, 0.25, 0.25, 0);     // background color
     glClear(GL_COLOR_BUFFER_BIT); // clear frame buffer
 
-    // Set color to (0, 1, 0) = green
     int location = glGetUniformLocation(gpuProgram.getId(), "color");
-    glUniform3f(location, 0.0f, 1.0f, 1.0f); // 3 floats
+    glUniform3f(location, 0.0f, 0.0f, 0.0f); // 3 floats
 
-    float MVPtransf[4][4] = { 1, 0, 0, 0,    // MVP matrix,
-                              0, 1, 0, 0,    // row-major!
-                              0, 0, 1, 0,
-                              0, 0, 0, 1 };
-
-    location = glGetUniformLocation(gpuProgram.getId(), "MVP");	// Get the GPU location of uniform variable MVP
-    glUniformMatrix4fv(location, 1, GL_TRUE, &MVPtransf[0][0]);	// Load a 4x4 row-major float matrix to the specified location
-
+    //const float r0 = xmax;
+    hip_circ(yRot,xRot);
 
     glBindVertexArray(vao);  // Draw call
-    glDrawArrays(GL_TRIANGLE_FAN, 0 /*startIdx*/, nv/*# Elements*/);
+
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glVertexAttribPointer(0,3, GL_FLOAT, GL_FALSE,0, NULL);
+    glDrawArrays(GL_TRIANGLE_FAN, 0/*startIdx*/, nv/*# Elements*/);
+
+
+    int location2 = glGetUniformLocation(gpuProgram.getId(), "color");
+    glUniform3f(location2, 1.0f, 0.0f, 0.0f); // 3 floats
+
+    glBindBuffer(GL_ARRAY_BUFFER, vbo2);
+    glVertexAttribPointer(0,3, GL_FLOAT, GL_FALSE,0, NULL);
+    glDrawArrays(GL_TRIANGLE_FAN, 0/*startIdx*/, nv/*# Elements*/);
+
 
     glutSwapBuffers(); // exchange buffers for double buffering
 }
 
 // Key of ASCII code pressed
 void onKeyboard(unsigned char key, int pX, int pY) {
-    if (key == 'd') glutPostRedisplay();         // if d, invalidate display, i.e. redraw
+   pressed[key] = true;
 }
 
 // Key of ASCII code released
 void onKeyboardUp(unsigned char key, int pX, int pY) {
+    pressed[key] = false;
 }
 
 // Move mouse with key pressed
@@ -226,5 +276,16 @@ void onMouse(int button, int state, int pX, int pY) { // pX, pY are the pixel co
 
 // Idle event indicating that some time elapsed: do animation here
 void onIdle() {
-    long time = glutGet(GLUT_ELAPSED_TIME)/1000; // elapsed time since the start of the program
+    float time = glutGet(GLUT_ELAPSED_TIME)/1000.0f;
+
+    if(pressed['e']){
+        yRot += 0.01f*time;
+    }else if(pressed['s']){
+        xRot += 0.01f*time;
+    }else if(pressed['f']){
+        xRot -= 0.01f*time;
+    }
+
+
+    glutPostRedisplay();
 }
