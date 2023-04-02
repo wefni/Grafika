@@ -128,13 +128,10 @@ vec3 pont(vec3 v,vec3 p){
 }
 
 const int nv = 1000;
-
-
 bool pressed[256] = {false,};
-
 std::vector<vec3> pontok;
-
 vec3 p1;
+float radius = 0.01f;
 
 class Hami{
 public:
@@ -142,7 +139,6 @@ public:
     vec3 vektor;
     unsigned int id;
     unsigned int id2;
-
 
     Hami(vec3 o,vec3 v,unsigned int i,unsigned int j){
         origo = o;
@@ -164,6 +160,7 @@ public:
         vec3 vertices[nv];
         vec3 eP;
         vec3 eP2;
+        vec3 eP3;
 
 
         for(int i = 0; i < nv; ++i) {
@@ -171,8 +168,9 @@ public:
             p1.z = p_w(p1);
             vertices[i] = p1;
 
-           if(i==100) eP = p1;
-           if(i==900) eP2 = p1;
+            if(i==0) eP3 = p1;
+            if(i==100) eP = p1;
+            if(i==900) eP2 = p1;
 
             vektor = rotate(vektor,origo,0.00628318531);
         }
@@ -184,6 +182,7 @@ public:
 
         drawSzem(eP,id2);
         drawSzem(eP2,id2+1);
+        drawSzaj(eP3,id2+2);
     }
 
     void drawSzem(vec3 ep,int iD) {
@@ -219,14 +218,63 @@ public:
                               0, NULL);
     }
 
+    void drawSzaj(vec3 ep,int iD) {
+
+        glGenVertexArrays(1, &vao);
+        glBindVertexArray(vao);
+
+        glGenBuffers(1, &vbo[iD]);
+        glBindBuffer(GL_ARRAY_BUFFER, vbo[iD]);
+
+        vec3 t(ep.x, ep.y, ep.z);
+        vec3 vek(1, 1, 0);
+        vek = norm(vek);
+        t.z = p_w(t);
+        vek = hip_w(vek, t);
+
+        vec3 vertices[nv];
+
+            for (int i = 0; i < nv; ++i) {
+                vec3 p2 = vel_vector(vek, t, radius);
+                p2.z = p_w(p2);
+                vertices[i] = p2;
+                vek = rotate(vek, t, 0.00628318531);
+            }
+
+        glBufferData(GL_ARRAY_BUFFER,
+                     sizeof(vec3) * nv,
+                     vertices,
+                     GL_STATIC_DRAW);
+
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0,
+                              3, GL_FLOAT, GL_FALSE,
+                              0, NULL);
+    }
+
     void go(){
+
+        glGenVertexArrays(1, &vao);
+        glBindVertexArray(vao);
+
+        glGenBuffers(1, &vbo[11]);
+        glBindBuffer(GL_ARRAY_BUFFER, vbo[11]);
 
         vec3 pet = vel_vector(vektor,origo,0.01f);
         origo = pet;
         vektor = der(vektor,origo,0.01f);
 
-        pontok.push_back(origo);
+        pontok.push_back(pet);
 
+        glBufferData(GL_ARRAY_BUFFER,
+                     sizeof(vec3) * pontok.size(),
+                     &pontok[0],
+                     GL_STATIC_DRAW);
+
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0,
+                              3, GL_FLOAT, GL_FALSE,
+                              0, NULL);
 
     }
 };
@@ -280,7 +328,8 @@ void onDisplay() {
     int location = glGetUniformLocation(gpuProgram.getId(), "color");
     glUniform3f(location, 0.0f, 0.0f, 0.0f);
 
-    h.drawHami();
+
+        h.drawHami();
 
     glBindVertexArray(vao);
 
@@ -288,6 +337,13 @@ void onDisplay() {
     glVertexAttribPointer(0,3, GL_FLOAT, GL_FALSE,0, NULL);
     glDrawArrays(GL_TRIANGLE_FAN, 0, nv);
 
+
+    int location5 = glGetUniformLocation(gpuProgram.getId(), "color");
+    glUniform3f(location5, 1.0f, 1.0f, 1.0f);
+
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[11]);
+    glVertexAttribPointer(0,3, GL_FLOAT, GL_FALSE,0, NULL);
+    glDrawArrays(GL_LINE_STRIP, 0, pontok.size());
 
     int location2 = glGetUniformLocation(gpuProgram.getId(), "color");
     glUniform3f(location2, 1.0f, 0.0f, 0.0f);
@@ -310,13 +366,12 @@ void onDisplay() {
     glVertexAttribPointer(0,3, GL_FLOAT, GL_FALSE,0, NULL);
     glDrawArrays(GL_TRIANGLE_FAN, 0, nv);
 
-    int location5 = glGetUniformLocation(gpuProgram.getId(), "color");
-    glUniform3f(location5, 1.0f, 1.0f, 1.0f);
+    int location6 = glGetUniformLocation(gpuProgram.getId(), "color");
+    glUniform3f(location6, 0.0f, 0.0f, 0.0f);
 
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[11]);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[4]);
     glVertexAttribPointer(0,3, GL_FLOAT, GL_FALSE,0, NULL);
-    glDrawArrays(GL_LINE_STRIP, 0, pontok.size());
-
+    glDrawArrays(GL_TRIANGLE_FAN, 0, nv);
 
 
     glutSwapBuffers();
@@ -363,32 +418,10 @@ void onMouse(int button, int state, int pX, int pY) { // pX, pY are the pixel co
 void onIdle() {
     float time = glutGet(GLUT_ELAPSED_TIME)/1000.0f;
 
+    radius = 0.1f*sinf(time/1.5f);
+
     if(pressed['e']) {
         h.go();
-        /*glGenVertexArrays(1, &vao);
-        glBindVertexArray(vao);
-
-        glGenBuffers(1, &vbo[11]);
-        glBindBuffer(GL_ARRAY_BUFFER, vbo[11]);
-
-
-        //vec3 pet = vel_vector(vektor,origo,0.01f);
-        //origo = pet;
-       // vektor = der(vektor,origo,0.01f);
-
-        printf("{%f %f}\n",h.origo.x,h.origo.y);
-
-
-        glBufferData(GL_ARRAY_BUFFER,
-                     sizeof(vec3) * pontok.size(),
-                     &pontok,
-                     GL_STATIC_DRAW);
-
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0,
-                              3, GL_FLOAT, GL_FALSE,
-                              0, NULL);*/
-
     }
     else if(pressed['f']) {
         h.vektor = rotate(h.vektor,h.origo,M_PI/150);
@@ -396,7 +429,6 @@ void onIdle() {
     else if(pressed['s']) {
        h.vektor = rotate(h.vektor,h.origo,-M_PI/150);
     }
-
 
     glutPostRedisplay();
 }
