@@ -61,8 +61,7 @@ const char * const fragmentSource = R"(
 
 GPUProgram gpuProgram;
 unsigned int vao;
-unsigned int vbo[12];
-
+unsigned int vbo[20];
 
 
 float newDot(const vec3& v1, const vec3& v2) {
@@ -103,14 +102,17 @@ vec3 der(vec3 v,vec3 p,float t){
     return p*sinhf(t)+v*coshf(t);
 }
 
-vec3 dir(vec3 p,vec3 q,float t){
-    return (q-p*coshf(t))/sinhf(t);
+vec3 dir(vec3 d,vec3 q,float t){
+    d.z = p_w(d);
+    q.z = p_w(q);
+    return (q-d*coshf(t))/sinhf(t);
 }
 
-float distance(vec3 p,vec3 q){
-    return acoshf(newDot(p,q));
+float distance(vec3 d,vec3 q){
+    d.z = p_w(d);
+    q.z = p_w(q);
+    return acoshf(-1*newDot(d,q));
 }
-
 
 vec3 rotate(vec3 v,vec3 p,float phi){
     v = norm(v);
@@ -119,24 +121,22 @@ vec3 rotate(vec3 v,vec3 p,float phi){
     return v*cosf(phi) + mer(v,p)*sinf(phi);
 }
 
-vec3 pont(vec3 v,vec3 p){
-    v = norm(v);
-    p.z = p_w(p);
-    v = hip_w(v,p);
-    float t = sqrtf(newDot(v,v));
-    return p*coshf(t)+v*sinhf(t);
-}
-
 const int nv = 1000;
 bool pressed[256] = {false,};
 std::vector<vec3> pontok;
+std::vector<vec3> pontok2;
 vec3 p1;
+
 float radius = 0.01f;
 
 class Hami{
 public:
     vec3 origo;
     vec3 vektor;
+    vec3 pupVec;
+    vec3 eP;
+    vec3 eP2;
+    vec3 p3;
     unsigned int id;
     unsigned int id2;
 
@@ -145,11 +145,13 @@ public:
         vektor = v;
         id = i;
         id2 = j;
+        pupVec = vec3(1,1,0);
     }
 
     void drawHami(){
-        glGenVertexArrays(1, &vao);
+
         glBindVertexArray(vao);
+
         glGenBuffers(1, &vbo[id]);
         glBindBuffer(GL_ARRAY_BUFFER, vbo[id]);
 
@@ -158,13 +160,10 @@ public:
         vektor = hip_w(vektor,origo);
 
         vec3 vertices[nv];
-        vec3 eP;
-        vec3 eP2;
         vec3 eP3;
 
-
         for(int i = 0; i < nv; ++i) {
-            p1 = vel_vector(vektor,origo,0.35);
+            p1 = vel_vector(vektor,origo,0.30);
             p1.z = p_w(p1);
             vertices[i] = p1;
 
@@ -180,17 +179,18 @@ public:
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0,3, GL_FLOAT, GL_FALSE,0, NULL);
 
-        drawSzem(eP,id2);
-        drawSzem(eP2,id2+1);
+        drawSzem(eP,id2,1);
+        drawSzem(eP2,id2+1,2);
         drawSzaj(eP3,id2+2);
     }
 
-    void drawSzem(vec3 ep,int iD) {
-        glGenVertexArrays(1, &vao);
+    void drawSzem(vec3 ep,int iD,int sz) {
+
         glBindVertexArray(vao);
 
         glGenBuffers(1, &vbo[iD]);
         glBindBuffer(GL_ARRAY_BUFFER, vbo[iD]);
+
 
         vec3 t(ep.x, ep.y, ep.z);
         vec3 vek(1, 1, 0);
@@ -199,6 +199,8 @@ public:
         vek = hip_w(vek, t);
 
         vec3 vertices[nv];
+
+        p3 = vel_vector(pupVec, t, 0.05f);
 
         for (int i = 0; i < nv; ++i) {
             vec3 p2 = vel_vector(vek, t, 0.1f);
@@ -216,11 +218,46 @@ public:
         glVertexAttribPointer(0,
                               3, GL_FLOAT, GL_FALSE,
                               0, NULL);
+        if(sz == 1)  drawPup(p3,id2+3);
+        if(sz == 2)  drawPup(p3,id2+4);
+    }
+
+    void drawPup(vec3 ep,int iD){
+
+        glBindVertexArray(vao);
+
+        glGenBuffers(1, &vbo[iD]);
+        glBindBuffer(GL_ARRAY_BUFFER, vbo[iD]);
+
+        vec3 t(ep.x, ep.y, ep.z);
+        vec3 vek(1,1,0);
+        vek = norm(vek);
+        t.z = p_w(t);
+        vek = hip_w(vek, t);
+
+        vec3 vertices[nv];
+
+        for (int i = 0; i < nv; ++i) {
+            vec3 p2 = vel_vector(vek, t, 0.05f);
+            p2.z = p_w(p2);
+            vertices[i] = p2;
+            vek = rotate(vek, t, 0.00628318531);
+        }
+
+        glBufferData(GL_ARRAY_BUFFER,
+                     sizeof(vec3) * nv,
+                     vertices,
+                     GL_STATIC_DRAW);
+
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0,
+                              3, GL_FLOAT, GL_FALSE,
+                              0, NULL);
+
     }
 
     void drawSzaj(vec3 ep,int iD) {
 
-        glGenVertexArrays(1, &vao);
         glBindVertexArray(vao);
 
         glGenBuffers(1, &vbo[iD]);
@@ -254,11 +291,10 @@ public:
 
     void go(){
 
-        glGenVertexArrays(1, &vao);
         glBindVertexArray(vao);
 
-        glGenBuffers(1, &vbo[11]);
-        glBindBuffer(GL_ARRAY_BUFFER, vbo[11]);
+        glGenBuffers(1, &vbo[8]);
+        glBindBuffer(GL_ARRAY_BUFFER, vbo[8]);
 
         vec3 pet = vel_vector(vektor,origo,0.01f);
         origo = pet;
@@ -277,13 +313,38 @@ public:
                               0, NULL);
 
     }
+
+    void korbe(){
+        glBindVertexArray(vao);
+
+        glGenBuffers(1, &vbo[12]);
+        glBindBuffer(GL_ARRAY_BUFFER, vbo[12]);
+
+        vektor = rotate(vektor,origo,-M_PI/150);
+        vec3 pet = vel_vector(vektor,origo,0.01f);
+        origo = pet;
+        vektor = der(vektor,origo,0.01f);
+
+
+        pontok2.push_back(pet);
+
+        glBufferData(GL_ARRAY_BUFFER,
+                     sizeof(vec3) * pontok2.size(),
+                     &pontok2[0],
+                     GL_STATIC_DRAW);
+
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0,
+                              3, GL_FLOAT, GL_FALSE,
+                              0, NULL);
+    }
 };
 
 
 
 void circ(){
 
-    glGenVertexArrays(1, &vao);
+
     glBindVertexArray(vao);
 
 
@@ -313,23 +374,26 @@ void circ(){
 }
 
 void onInitialization() {
+    glGenVertexArrays(1, &vao);
     glViewport(0, 0, windowWidth, windowHeight);
     circ();
-
     gpuProgram.create(vertexSource, fragmentSource, "outColor");
 }
 
 Hami h(vec3(0,0,1.0),vec3(1,1,0.0),1,2);
+Hami h2(vec3(2.0,0.9,0),vec3(1,1,0),13,14);
 
 void onDisplay() {
     glClearColor(0.25, 0.25, 0.25, 0);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    int location = glGetUniformLocation(gpuProgram.getId(), "color");
-    glUniform3f(location, 0.0f, 0.0f, 0.0f);
+    int nagyKor = glGetUniformLocation(gpuProgram.getId(), "color");
+    glUniform3f(nagyKor, 0.0f, 0.0f, 0.0f);
 
 
+        h2.drawHami();
         h.drawHami();
+
 
     glBindVertexArray(vao);
 
@@ -338,41 +402,103 @@ void onDisplay() {
     glDrawArrays(GL_TRIANGLE_FAN, 0, nv);
 
 
-    int location5 = glGetUniformLocation(gpuProgram.getId(), "color");
-    glUniform3f(location5, 1.0f, 1.0f, 1.0f);
+    int csikPiros = glGetUniformLocation(gpuProgram.getId(), "color");
+    glUniform3f(csikPiros, 1.0f, 1.0f, 1.0f);
 
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[11]);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[8]);
     glVertexAttribPointer(0,3, GL_FLOAT, GL_FALSE,0, NULL);
     glDrawArrays(GL_LINE_STRIP, 0, pontok.size());
 
-    int location2 = glGetUniformLocation(gpuProgram.getId(), "color");
-    glUniform3f(location2, 1.0f, 0.0f, 0.0f);
+    int csikZold = glGetUniformLocation(gpuProgram.getId(), "color");
+    glUniform3f(csikZold, 1.0f, 1.0f, 1.0f);
+
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[12]);
+    glVertexAttribPointer(0,3, GL_FLOAT, GL_FALSE,0, NULL);
+    glDrawArrays(GL_LINE_STRIP, 0, pontok2.size());
+
+    int hamiZold = glGetUniformLocation(gpuProgram.getId(), "color");
+    glUniform3f(hamiZold, 0.0f, 1.0f, 0.0f);
+
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[13]);
+    glVertexAttribPointer(0,3, GL_FLOAT, GL_FALSE,0, NULL);
+    glDrawArrays(GL_TRIANGLE_FAN, 0, nv);
+
+    int szemZold_egy = glGetUniformLocation(gpuProgram.getId(), "color");
+    glUniform3f(szemZold_egy, 1.0f, 1.0f, 1.0f);
+
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[14]);
+    glVertexAttribPointer(0,3, GL_FLOAT, GL_FALSE,0, NULL);
+    glDrawArrays(GL_TRIANGLE_FAN, 0, nv);
+
+    int szemZold_ketto = glGetUniformLocation(gpuProgram.getId(), "color");
+    glUniform3f(szemZold_ketto, 1.0f, 1.0f, 1.0f);
+
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[15]);
+    glVertexAttribPointer(0,3, GL_FLOAT, GL_FALSE,0, NULL);
+    glDrawArrays(GL_TRIANGLE_FAN, 0, nv);
+
+    int szajZold = glGetUniformLocation(gpuProgram.getId(), "color");
+    glUniform3f(szajZold, 0.0f, 0.0f, 0.0f);
+
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[16]);
+    glVertexAttribPointer(0,3, GL_FLOAT, GL_FALSE,0, NULL);
+    glDrawArrays(GL_TRIANGLE_FAN, 0, nv);
+
+    int pupZold1 = glGetUniformLocation(gpuProgram.getId(), "color");
+    glUniform3f(pupZold1, 0.0f, 0.0f, 1.0f);
+
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[17]);
+    glVertexAttribPointer(0,3, GL_FLOAT, GL_FALSE,0, NULL);
+    glDrawArrays(GL_TRIANGLE_FAN, 0, nv);
+
+    int pupZold2 = glGetUniformLocation(gpuProgram.getId(), "color");
+    glUniform3f(pupZold2, 0.0f, 0.0f, 1.0f);
+
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[18]);
+    glVertexAttribPointer(0,3, GL_FLOAT, GL_FALSE,0, NULL);
+    glDrawArrays(GL_TRIANGLE_FAN, 0, nv);
+
+    int hamiPiros = glGetUniformLocation(gpuProgram.getId(), "color");
+    glUniform3f(hamiPiros, 1.0f, 0.0f, 0.0f);
 
     glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
     glVertexAttribPointer(0,3, GL_FLOAT, GL_FALSE,0, NULL);
     glDrawArrays(GL_TRIANGLE_FAN, 0, nv);
 
-    int location3 = glGetUniformLocation(gpuProgram.getId(), "color");
-    glUniform3f(location3, 1.0f, 1.0f, 1.0f);
+    int szemPiros_egy = glGetUniformLocation(gpuProgram.getId(), "color");
+    glUniform3f(szemPiros_egy, 1.0f, 1.0f, 1.0f);
 
     glBindBuffer(GL_ARRAY_BUFFER, vbo[2]);
     glVertexAttribPointer(0,3, GL_FLOAT, GL_FALSE,0, NULL);
     glDrawArrays(GL_TRIANGLE_FAN, 0, nv);
 
-    int location4 = glGetUniformLocation(gpuProgram.getId(), "color");
-    glUniform3f(location4, 1.0f, 1.0f, 1.0f);
+    int szemPiros_ketto = glGetUniformLocation(gpuProgram.getId(), "color");
+    glUniform3f(szemPiros_ketto, 1.0f, 1.0f, 1.0f);
 
     glBindBuffer(GL_ARRAY_BUFFER, vbo[3]);
     glVertexAttribPointer(0,3, GL_FLOAT, GL_FALSE,0, NULL);
     glDrawArrays(GL_TRIANGLE_FAN, 0, nv);
 
-    int location6 = glGetUniformLocation(gpuProgram.getId(), "color");
-    glUniform3f(location6, 0.0f, 0.0f, 0.0f);
+    int szajPiroos = glGetUniformLocation(gpuProgram.getId(), "color");
+    glUniform3f(szajPiroos, 0.0f, 0.0f, 0.0f);
 
     glBindBuffer(GL_ARRAY_BUFFER, vbo[4]);
     glVertexAttribPointer(0,3, GL_FLOAT, GL_FALSE,0, NULL);
     glDrawArrays(GL_TRIANGLE_FAN, 0, nv);
 
+    int pupPiroos1 = glGetUniformLocation(gpuProgram.getId(), "color");
+    glUniform3f(pupPiroos1, 0.0f, 0.0f, 1.0f);
+
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[5]);
+    glVertexAttribPointer(0,3, GL_FLOAT, GL_FALSE,0, NULL);
+    glDrawArrays(GL_TRIANGLE_FAN, 0, nv);
+
+    int pupPiroos2 = glGetUniformLocation(gpuProgram.getId(), "color");
+    glUniform3f(pupPiroos2, 0.0f, 0.0f, 1.0f);
+
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[6]);
+    glVertexAttribPointer(0,3, GL_FLOAT, GL_FALSE,0, NULL);
+    glDrawArrays(GL_TRIANGLE_FAN, 0, nv);
 
     glutSwapBuffers();
 }
@@ -388,47 +514,62 @@ void onKeyboardUp(unsigned char key, int pX, int pY) {
 }
 
 
-void onMouseMotion(int pX, int pY) {	// pX, pY are the pixel coordinates of the cursor in the coordinate system of the operation system
-    // Convert to normalized device space
-    float cX = 2.0f * pX / windowWidth - 1;	// flip y axis
-    float cY = 1.0f - 2.0f * pY / windowHeight;
-    printf("Mouse moved to (%3.2f, %3.2f)\n", cX, cY);
+void onMouseMotion(int pX, int pY) {
 }
 
 
-void onMouse(int button, int state, int pX, int pY) { // pX, pY are the pixel coordinates of the cursor in the coordinate system of the operation system
-    // Convert to normalized device space
-    float cX = 2.0f * pX / windowWidth - 1;	// flip y axis
-    float cY = 1.0f - 2.0f * pY / windowHeight;
-
-    char * buttonStat;
-    switch (state) {
-        case GLUT_DOWN: buttonStat = "pressed"; break;
-        case GLUT_UP:   buttonStat = "released"; break;
-    }
-
-    switch (button) {
-        case GLUT_LEFT_BUTTON:   printf("Left button %s at (%3.2f, %3.2f)\n", buttonStat, cX, cY);   break;
-        case GLUT_MIDDLE_BUTTON: printf("Middle button %s at (%3.2f, %3.2f)\n", buttonStat, cX, cY); break;
-        case GLUT_RIGHT_BUTTON:  printf("Right button %s at (%3.2f, %3.2f)\n", buttonStat, cX, cY);  break;
-    }
+void onMouse(int button, int state, int pX, int pY) {
 }
 
+int lt;
 
 void onIdle() {
-    float time = glutGet(GLUT_ELAPSED_TIME)/1000.0f;
 
-    radius = 0.1f*sinf(time/1.5f);
+    float time = glutGet(GLUT_ELAPSED_TIME);
+    int dt = (time-lt);
+
+    if(dt>40){
+        for (int i = 0; i < 40; ++i) {
+            h2.korbe();
+            radius = 0.1f*sinf((time/1000)/1.5f);
+
+            h.pupVec = dir(h.eP,h2.origo, distance(h.eP,h2.origo));
+            h2.pupVec = dir(h2.eP,h.origo, distance(h2.eP,h.origo));
+
+            if(pressed['e']) {
+                h.go();
+            }
+
+            if(pressed['f']) {
+                h.vektor = rotate(h.vektor,h.origo,M_PI/150);
+            }
+
+            if(pressed['s']) {
+                h.vektor = rotate(h.vektor,h.origo,-M_PI/150);
+            }
+        }
+        dt-=40;
+    }
+
+    h2.korbe();
+    radius = 0.1f*sinf((time/1000)/1.5f);
+
+    h.pupVec = dir(h.eP,h2.origo, distance(h.eP,h2.origo));
+    h2.pupVec = dir(h2.eP,h.origo, distance(h2.eP,h.origo));
 
     if(pressed['e']) {
         h.go();
     }
-    else if(pressed['f']) {
+
+    if(pressed['f']) {
         h.vektor = rotate(h.vektor,h.origo,M_PI/150);
     }
-    else if(pressed['s']) {
-       h.vektor = rotate(h.vektor,h.origo,-M_PI/150);
+
+    if(pressed['s']) {
+        h.vektor = rotate(h.vektor,h.origo,-M_PI/150);
     }
+
+    lt = time;
 
     glutPostRedisplay();
 }
